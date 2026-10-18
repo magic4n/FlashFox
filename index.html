@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlashFox — WebUSB Fastboot Tool</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Декоративные фоновые элементы -->
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+
+  <div class="app-wrapper">
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
+    <header class="top-header">
+      <div class="brand">
+        <div class="brand-logo" id="fox-logo"></div>
+        <div class="brand-text">
+          <h1>FlashFox</h1>
+          <span class="subtitle" data-i18n="app.subtitle">WebUSB Fastboot Suite</span>
+        </div>
+      </div>
+
+      <div class="device-status-bar">
+        <div class="status-badge" id="status-badge" data-state="disconnected">
+          <span class="status-dot"></span>
+          <span id="status-text" data-i18n="status.disconnected">Не подключено</span>
+        </div>
+        <button class="btn btn-gradient" id="btn-connect">
+          <span class="icon-slot" data-icon="usb"></span>
+          <span id="btn-connect-text" data-i18n="btn.connect">Подключить</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ПОЛОСА ПРОГРЕССА АКТИВНОЙ ЗАДАЧИ -->
+    <div class="progress-banner hidden" id="progress-banner">
+      <div class="progress-info">
+        <span id="progress-label">Flashing...</span>
+        <span id="progress-percent">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- ОСНОВНАЯ РАБОЧАЯ ОБЛАСТЬ -->
+    <main class="main-workspace">
+      <!-- ЛЕВАЯ ЧАСТЬ: ВКЛАДКИ -->
+      <section class="tab-container">
+
+        <!-- ВКЛАДКА 1: КОНСОЛЬ -->
+        <div class="tab-pane active" id="tab-console">
+          <div class="card console-card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="icon-slot" data-icon="terminal"></span>
+                <h2 data-i18n="tabs.console">Fastboot Консоль</h2>
+              </div>
+              <div class="console-actions">
+                <button class="btn btn-ghost btn-sm" id="btn-copy-log" title="Copy">
+                  <span class="icon-slot" data-icon="copy"></span>
+                  <span data-i18n="console.copy">Копировать</span>
+                </button>
+                <button class="btn btn-ghost btn-sm" id="btn-clear-log" title="Clear">
+                  <span class="icon-slot" data-icon="trash"></span>
+                  <span data-i18n="console.clear">Очистить</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Окно терминала с плавным скроллингом -->
+            <div class="terminal-viewport" id="terminal-viewport">
+              <div class="terminal-logs" id="terminal-logs"></div>
+            </div>
+
+            <!-- Ввод команды -->
+            <form class="console-input-bar" id="console-form">
+              <span class="prompt-prefix">fastboot &gt;</span>
+              <input
+                type="text"
+                id="console-input"
+                class="mono-input"
+                data-i18n-placeholder="console.placeholder"
+                placeholder="Введите команду (например: getvar all, oem device-info, reboot)..."
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="submit" class="btn btn-gradient btn-run" id="btn-run-cmd">
+                <span class="icon-slot" data-icon="send"></span>
+                <span data-i18n="console.run">Выполнить</span>
+              </button>
+            </form>
+
+            <!-- Быстрые команды (из ConsoleTab.vue) -->
+            <div class="quick-commands-section">
+              <span class="quick-label" data-i18n="console.quick">Быстрые команды:</span>
+              <div class="quick-chips" id="quick-chips"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ВКЛАДКА 2: ПРОШИВКА И УПРАВЛЕНИЕ (FLASH & TOOLS) -->
+        <div class="tab-pane" id="tab-flash">
+          <div class="flash-grid">
+            <!-- Карточка прошивки образа -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title-group">
+                  <span class="icon-slot" data-icon="bolt"></span>
+                  <h2 data-i18n="flash.title">Прошивка раздела (.img)</h2>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label data-i18n="flash.partitionLabel">Раздел (Partition)</label>
+                  <div class="partition-row">
+                    <input
+                      type="text"
+                      id="flash-partition"
+                      class="text-input mono"
+                      placeholder="boot, recovery, vendor_boot, super..."
+                      value="boot"
+                    />
+                    <select id="flash-slot" class="select-input">
+                      <option value="current" data-i18n="flash.slotCurrent">Текущий слот</option>
+                      <option value="other" data-i18n="flash.slotOther">Другой слот</option>
+                      <option value="a">Slot A (_a)</option>
+                      <option value="b">Slot B (_b)</option>
+                    </select>
+                  </div>
+                  <div class="preset-partitions" id="preset-partitions">
+                    <button type="button" class="chip-btn" data-part="boot">boot</button>
+                    <button type="button" class="chip-btn" data-part="init_boot">init_boot</button>
+                    <button type="button" class="chip-btn" data-part="recovery">recovery</button>
+                    <button type="button" class="chip-btn" data-part="vendor_boot">vendor_boot</button>
+                    <button type="button" class="chip-btn" data-part="dtbo">dtbo</button>
+                    <button type="button" class="chip-btn" data-part="vbmeta">vbmeta</button>
+                    <button type="button" class="chip-btn" data-part="super">super</button>
+                    <button type="button" class="chip-btn" data-part="system">system</button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label data-i18n="flash.fileLabel">Образ прошивки (.img / Sparse)</label>
+                  <label class="file-dropzone" id="file-dropzone">
+                    <input type="file" id="flash-file-input" accept=".img,.bin" hidden />
+                    <span class="icon-slot dropzone-icon" data-icon="upload"></span>
+                    <span class="dropzone-title" id="dropzone-title" data-i18n="flash.dropzone">Выберите .img файл или перетащите сюда</span>
+                    <span class="dropzone-meta" id="dropzone-meta" data-i18n="flash.dropzoneSub">Автоматическая нарезка больших образов (Sparse)</span>
+                  </label>
+                </div>
+
+                <div class="action-buttons-row">
+                  <button class="btn btn-gradient" id="btn-flash-image">
+                    <span class="icon-slot" data-icon="bolt"></span>
+                    <span data-i18n="flash.btnFlash">Прошить раздел</span>
+                  </button>
+                  <button class="btn btn-outlined" id="btn-boot-image">
+                    <span class="icon-slot" data-icon="play"></span>
+                    <span data-i18n="flash.btnBoot">Загрузить (Boot без прошивки)</span>
+                  </button>
+                  <button class="btn btn-danger-outline" id="btn-erase-partition">
+                    <span class="icon-slot" data-icon="trash"></span>
+                    <span data-i18n="flash.btnErase">Стереть раздел</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Карточка управления питанием и слотами -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title-group">
+                  <span class="icon-slot" data-icon="power"></span>
+                  <h2 data-i18n="power.title">Питание и Слоты</h2>
+                </div>
+              </div>
+              <div class="card-body">
+                <p class="section-desc" data-i18n="power.rebootDesc">Перезагрузка устройства в выбранный режим:</p>
+                <div class="reboot-grid">
+                  <button class="btn btn-outlined" data-reboot="system">
+                    <span class="icon-slot" data-icon="phone"></span>
+                    <span data-i18n="power.rebootSystem">Система (System)</span>
+                  </button>
+                  <button class="btn btn-outlined" data-reboot="bootloader">
+                    <span class="icon-slot" data-icon="cpu"></span>
+                    <span data-i18n="power.rebootBootloader">Загрузчик (Bootloader)</span>
+                  </button>
+                  <button class="btn btn-outlined" data-reboot="fastboot">
+                    <span class="icon-slot" data-icon="bolt"></span>
+                    <span data-i18n="power.rebootFastbootd">Fastbootd (Userspace)</span>
+                  </button>
+                  <button class="btn btn-outlined" data-reboot="recovery">
+                    <span class="icon-slot" data-icon="shield"></span>
+                    <span data-i18n="power.rebootRecovery">Рекавери (Recovery)</span>
+                  </button>
+                </div>
+
+                <hr class="divider" />
+
+                <p class="section-desc" data-i18n="power.slotDesc">Быстрое переключение активного A/B слота:</p>
+                <div class="slot-switch-row">
+                  <button class="btn btn-outlined" id="btn-slot-a">
+                    <span class="icon-slot" data-icon="layers"></span>
+                    <span data-i18n="power.setSlotA">Сделать активным Slot A</span>
+                  </button>
+                  <button class="btn btn-outlined" id="btn-slot-b">
+                    <span class="icon-slot" data-icon="layers"></span>
+                    <span data-i18n="power.setSlotB">Сделать активным Slot B</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ВКЛАДКА 3: ИНФОРМАЦИЯ ОБ УСТРОЙСТВЕ -->
+        <div class="tab-pane" id="tab-info">
+          <div class="card info-card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="icon-slot" data-icon="info"></span>
+                <h2 data-i18n="info.title">Параметры устройства (GetVar)</h2>
+              </div>
+              <button class="btn btn-outlined btn-sm" id="btn-refresh-info">
+                <span class="icon-slot" data-icon="refresh"></span>
+                <span data-i18n="info.refresh">Обновить всё</span>
+              </button>
+            </div>
+
+            <!-- Сводные карточки -->
+            <div class="summary-cards" id="summary-cards">
+              <div class="stat-box">
+                <span class="stat-label" data-i18n="info.product">Продукт (Product)</span>
+                <strong class="stat-val mono" id="stat-product">—</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-label" data-i18n="info.serial">Серийный номер</span>
+                <strong class="stat-val mono" id="stat-serial">—</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-label" data-i18n="info.slot">Активный слот</span>
+                <strong class="stat-val mono" id="stat-slot">—</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-label" data-i18n="info.unlocked">Загрузчик (Unlocked)</span>
+                <strong class="stat-val mono" id="stat-unlocked">—</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-label" data-i18n="info.mode">Режим (Userspace)</span>
+                <strong class="stat-val mono" id="stat-mode">—</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-label" data-i18n="info.maxDownload">Макс. размер загрузки</span>
+                <strong class="stat-val mono" id="stat-maxdl">—</strong>
+              </div>
+            </div>
+
+            <!-- Поиск по переменным -->
+            <div class="var-filter-bar">
+              <input
+                type="text"
+                id="var-search"
+                class="text-input"
+                data-i18n-placeholder="info.searchPlaceholder"
+                placeholder="Фильтр переменных (например: partition-size, version, battery)..."
+              />
+            </div>
+
+            <div class="vars-table-wrapper">
+              <table class="vars-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="info.colVar">Переменная</th>
+                    <th data-i18n="info.colVal">Значение</th>
+                  </tr>
+                </thead>
+                <tbody id="vars-tbody">
+                  <tr>
+                    <td colspan="2" class="empty-cell" data-i18n="info.empty">Подключите устройство или нажмите «Обновить всё», чтобы прочитать переменные загрузчика.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </section>
+    </main>
+
+    <!-- НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ И ПЕРЕКЛЮЧЕНИЯ ЯЗЫКА -->
+    <nav class="bottom-dock">
+      <div class="dock-tabs" role="tablist">
+        <button class="dock-tab active" data-target="tab-console" role="tab">
+          <span class="icon-slot" data-icon="terminal"></span>
+          <span data-i18n="nav.console">Консоль</span>
+        </button>
+        <button class="dock-tab" data-target="tab-flash" role="tab">
+          <span class="icon-slot" data-icon="bolt"></span>
+          <span data-i18n="nav.flash">Прошивка</span>
+        </button>
+        <button class="dock-tab" data-target="tab-info" role="tab">
+          <span class="icon-slot" data-icon="info"></span>
+          <span data-i18n="nav.info">Устройство</span>
+        </button>
+        <div class="dock-indicator" id="dock-indicator"></div>
+      </div>
+
+      <div class="dock-right">
+        <button class="lang-switch-btn" id="btn-lang-toggle" title="Switch Language / Сменить язык">
+          <span class="icon-slot globe-anim" data-icon="globe"></span>
+          <span class="lang-code" id="lang-label">RU</span>
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
